@@ -62,8 +62,35 @@ class TestJob(object):
                 merge_request.source_project_id,
                 merge_request.source_branch,
                 merge_job._api,
+                username=None,
             )
             assert r_ci_status == 'success'
+
+    def test_require_ci_run_by_me(self):
+        with patch('marge.job.Pipeline', autospec=True) as pipeline_class, patch('time.sleep'):
+            merge_job = self.get_merge_job(
+                options=MergeJobOptions.default(
+                    ci_timeout=timedelta(seconds=1),
+                    require_ci_run_by_me=True))
+            merge_job._user.username = 'marge'
+            merge_request = self._mock_merge_request(sha='abc')
+
+            pipelines = [
+                [],
+                [Mock(spec=pipeline_class, sha='abc', status='success')],
+            ]
+            pipeline_class.pipelines_by_branch.side_effect = lambda *args, **kw: pipelines.pop(0)
+            merge_job.wait_for_ci_to_pass(merge_request)
+
+            # Asked for pipelines started by me, started a pipeline, returned
+            # without timing out.
+            pipeline_class.pipelines_by_branch.assert_any_call(
+                merge_request.source_project_id,
+                merge_request.source_branch,
+                merge_job._api,
+                username='marge',
+            )
+            assert pipeline_class.start.call_count == 1
 
     def test_ensure_mergeable_mr_not_assigned(self):
         merge_job = self.get_merge_job()
@@ -188,6 +215,7 @@ class TestMergeJobOptions(object):
             embargo=marge.interval.IntervalUnion.empty(),
             ci_timeout=timedelta(minutes=15),
             merge_strategy=MergeStrategy.rebase,
+            require_ci_run_by_me=False,
         )
 
     def test_default_ci_time(self):

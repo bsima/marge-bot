@@ -176,6 +176,14 @@ def _parse_config(args):
         help='Deprecated; use --ci-timeout.\n',
     )
     parser.add_argument(
+        '--require-ci-run-by-me',
+        action='store_true',
+        help=(
+            'Require a successful CI started by me. Start one if necessary.\n'
+            'The idea is that you can use $GITLAB_USER_LOGIN = marge-bot to run expensive merge-only CI.\n'
+        ),
+    )
+    parser.add_argument(
         '--git-timeout',
         type=time_interval,
         default='120s',
@@ -276,6 +284,7 @@ def main(args=None):
                 embargo=options.embargo,
                 ci_timeout=options.ci_timeout,
                 merge_strategy=options.merge_strategy,
+                require_ci_run_by_me=options.require_ci_run_by_me,
             ),
             batch=options.batch,
         )

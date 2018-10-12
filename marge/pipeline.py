@@ -16,6 +16,7 @@ class Pipeline(gitlab.Resource):
             status=None,
             order_by='id',
             sort='desc',
+            username=None,
     ):
         params = {
             'ref': branch if ref is None else ref,
@@ -24,12 +25,23 @@ class Pipeline(gitlab.Resource):
         }
         if status is not None:
             params['status'] = status
+        if username is not None:
+            params['username'] = username
         pipelines_info = api.call(GET(
             '/projects/{project_id}/pipelines'.format(project_id=project_id),
             params,
         ))
 
         return [cls(api, pipeline_info, project_id) for pipeline_info in pipelines_info]
+
+    @classmethod
+    def start(cls, project_id, branch, api):
+        """Start a new pipeline, return a Pipeline."""
+        response = api.call(POST(
+            '/projects/{project_id}/pipeline'.format(project_id=project_id),
+            {'ref': branch},
+        ))
+        return cls(api, response, project_id)
 
     @property
     def project_id(self):
