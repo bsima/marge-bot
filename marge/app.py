@@ -32,6 +32,7 @@ def time_interval(str_interval):
         ) from err
 
 
+# pylint: disable=too-many-statements
 def _parse_config(args):
 
     def regexp(str_regex):
@@ -188,6 +189,14 @@ def _parse_config(args):
         help='Deprecated; use --ci-timeout.\n',
     )
     parser.add_argument(
+        '--require-ci-run-by-me',
+        action='store_true',
+        help=(
+            'Require a successful CI started by me. Start one if necessary.\n'
+            'The idea is that you can use $GITLAB_USER_LOGIN = marge-bot to run expensive merge-only CI.\n'
+        ),
+    )
+    parser.add_argument(
         '--git-timeout',
         type=time_interval,
         default='120s',
@@ -342,6 +351,7 @@ def main(args=None):
                 use_no_ff_batches=options.use_no_ff_batches,
                 use_merge_commit_batches=options.use_merge_commit_batches,
                 skip_ci_batches=options.skip_ci_batches,
+                require_ci_run_by_me=options.require_ci_run_by_me,
             ),
             batch=options.batch,
             cli=options.cli,
