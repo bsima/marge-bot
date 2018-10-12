@@ -16,7 +16,9 @@ class Api:
         headers = {'PRIVATE-TOKEN': self._auth_token}
         if sudo:
             headers['SUDO'] = '%d' % sudo
-        log.debug('REQUEST: %s %s %r %r', method.__name__.upper(), url, headers, command.call_args)
+        cleaned_headers = headers.copy()
+        cleaned_headers['PRIVATE-TOKEN'] = 'xxxx'
+        log.debug('REQUEST: %s %s %r %r', method.__name__.upper(), url, cleaned_headers, command.call_args)
         # Timeout to prevent indefinitely hanging requests. 60s is very conservative,
         # but should be short enough to not cause any practical annoyances. We just
         # crash rather than retry since marge-bot should be run in a restart loop anyway.
