@@ -80,6 +80,7 @@ class SingleMergeJob(MergeJob):
                     log.info('Someone was naughty and by-passed marge')
                     merge_request.comment(
                         "My job would be easier if people didn't jump the queue and push directly... *sigh*"
+                        + "\nexpected %s, but latest is %s" % (target_sha, new_target_sha)
                     )
                     continue
                 # otherwise the source branch has been pushed to or something
