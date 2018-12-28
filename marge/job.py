@@ -300,11 +300,16 @@ class MergeJob(object):
             branch_rewritten = rewritten_sha != updated_sha
             repo.push(source_branch, source_repo_url=source_repo_url, force=True)
             changes_pushed = True
-        except git.GitError:
+        except git.GitError as exc:
+            log.info('GitError from fuse: {}'.format(exc))
             if not branch_updated:
                 raise CannotMerge('got conflicts while rebasing, your problem now...')
             if not branch_rewritten:
-                raise CannotMerge('failed on filter-branch; check my logs!')
+                raise CannotMerge(
+                    ('expected commit id to change on merge, but we have rewritten={}'
+                     ' updated={}. Or it could be the GitError: {}')
+                    .format(rewritten_sha, updated_sha, exc))
+                # raise CannotMerge('failed on filter-branch; check my logs!')
             if not changes_pushed:
                 if (
                     branch_rewritten and Branch.fetch_by_name(
