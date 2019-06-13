@@ -46,6 +46,8 @@ def _parse_config(args):
         formatter_class=configargparse.ArgumentDefaultsRawHelpFormatter,
         description=__doc__,
     )
+    # Log this on startup, so we can tell which version is running.
+    parser.add_argument('--set-version', type=str)
     parser.add_argument(
         '--config-file',
         env_var='MARGE_CONFIG_FILE',
@@ -253,8 +255,10 @@ def main(args=None):
     if options.debug:
         logging.getLogger().setLevel(logging.DEBUG)
     else:
-        logging.getLogger("requests").setLevel(logging.WARNING)
+        logging.getLogger().setLevel(logging.INFO)
 
+    logging.info('starting, version %s', options.set_version)
+    logging.info('starting, argv: %s', sys.argv)
     with _secret_auth_token_and_ssh_key(options) as (auth_token, ssh_key_file):
         api = gitlab.Api(options.gitlab_url, auth_token)
         user = user_module.User.myself(api)

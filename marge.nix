@@ -1,10 +1,8 @@
-{pkgs ? import ./pinnedNixpkgs.nix }:
-let version = builtins.replaceStrings ["\n"] [""] (builtins.readFile ./version);
-    python = (import ./requirements.nix { inherit pkgs; });
+{ version, pkgs ? import ./pinnedNixpkgs.nix }:
+let python = (import ./requirements.nix { inherit pkgs; });
     py = python.packages;
 in
 python.mkDerivation {
-  version = "${version}";
   name = "marge-${version}";
   src = ./.;
   buildInputs = [py.pytest py.pytest-cov py.pytest-flake8 py.pytest-pylint py.pytest-runner];
