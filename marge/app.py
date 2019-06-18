@@ -4,9 +4,13 @@ An auto-merger of merge requests for GitLab
 
 import contextlib
 import logging
+import logging.handlers
+import os
+import pwd
 import re
 import sys
 import tempfile
+import time
 from datetime import timedelta
 
 import configargparse
@@ -245,53 +249,81 @@ def _secret_auth_token_and_ssh_key(options):
                 tmp_ssh_key_file.close()
 
 
+def setup_logging(app_name, version):
+    """Setup logging such that google-fluentd can parse it.
+
+        This should be the standard setup for python logging at groq.
+        Since we have no libraries yet, just copy paste it :/
+    """
+    # Seriously, this is how you log in UTC.
+    logging.Formatter.converter = time.gmtime
+    # For marge, the user will always be the same, but I must stick to the
+    # convention so google-fluentd matches it properly.
+    me = pwd.getpwuid(os.geteuid()).pw_name
+    handler = logging.handlers.RotatingFileHandler(
+        '/var/log/groq/%s.%s.pylog' % (me, app_name),
+        'log/%s.marge.pylog' % (me,),
+        maxBytes=4*1024*1024,
+        backupCount=4,
+    )
+    handler.setFormatter(logging.Formatter(
+        fmt='%(asctime)s:%(levelname)s:%(filename)s:%(lineno)d: %(message)s',
+        datefmt='%Y-%m-%dT%H:%M:%S%z',
+    ))
+    logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(logging.DEBUG)
+    # Standard startup stanza so we know what is running.
+    logging.info('starting, version %s, argv: %s', version, sys.argv)
+
+
 def main(args=None):
     if not args:
         args = sys.argv[1:]
-    logging.basicConfig()
-
     options = _parse_config(args)
+    setup_logging('marge-bot', options.set_version)
 
     if options.debug:
         logging.getLogger().setLevel(logging.DEBUG)
     else:
         logging.getLogger().setLevel(logging.INFO)
 
-    logging.info('starting, version %s', options.set_version)
-    logging.info('starting, argv: %s', sys.argv)
-    with _secret_auth_token_and_ssh_key(options) as (auth_token, ssh_key_file):
-        api = gitlab.Api(options.gitlab_url, auth_token)
-        user = user_module.User.myself(api)
-        if options.max_ci_time_in_minutes:
-            logging.warning(
-                "--max-ci-time-in-minutes is DEPRECATED, use --ci-timeout %dmin",
-                options.max_ci_time_in_minutes
+    try:
+        with _secret_auth_token_and_ssh_key(options) as (auth_token, ssh_key_file):
+            api = gitlab.Api(options.gitlab_url, auth_token)
+            user = user_module.User.myself(api)
+            if options.max_ci_time_in_minutes:
+                logging.warning(
+                    "--max-ci-time-in-minutes is DEPRECATED, use --ci-timeout %dmin",
+                    options.max_ci_time_in_minutes
+                )
+                options.ci_timeout = timedelta(minutes=options.max_ci_time_in_minutes)
+
+            if options.batch:
+                logging.warning('Experimental batch mode enabled')
+
+            config = bot.BotConfig(
+                user=user,
+                ssh_key_file=ssh_key_file,
+                project_regexp=options.project_regexp,
+                git_timeout=options.git_timeout,
+                git_reference_repo=options.git_reference_repo,
+                branch_regexp=options.branch_regexp,
+                merge_opts=bot.MergeJobOptions.default(
+                    add_tested=options.add_tested,
+                    add_part_of=options.add_part_of,
+                    add_reviewers=options.add_reviewers,
+                    reapprove=options.impersonate_approvers,
+                    approval_timeout=options.approval_reset_timeout,
+                    embargo=options.embargo,
+                    ci_timeout=options.ci_timeout,
+                    merge_strategy=options.merge_strategy,
+                    require_ci_run_by_me=options.require_ci_run_by_me,
+                ),
+                batch=options.batch,
             )
-            options.ci_timeout = timedelta(minutes=options.max_ci_time_in_minutes)
 
-        if options.batch:
-            logging.warning('Experimental batch mode enabled')
-
-        config = bot.BotConfig(
-            user=user,
-            ssh_key_file=ssh_key_file,
-            project_regexp=options.project_regexp,
-            git_timeout=options.git_timeout,
-            git_reference_repo=options.git_reference_repo,
-            branch_regexp=options.branch_regexp,
-            merge_opts=bot.MergeJobOptions.default(
-                add_tested=options.add_tested,
-                add_part_of=options.add_part_of,
-                add_reviewers=options.add_reviewers,
-                reapprove=options.impersonate_approvers,
-                approval_timeout=options.approval_reset_timeout,
-                embargo=options.embargo,
-                ci_timeout=options.ci_timeout,
-                merge_strategy=options.merge_strategy,
-                require_ci_run_by_me=options.require_ci_run_by_me,
-            ),
-            batch=options.batch,
-        )
-
-        marge_bot = bot.Bot(api=api, config=config)
-        marge_bot.start()
+            marge_bot = bot.Bot(api=api, config=config)
+            marge_bot.start()
+    except Exception as exc:
+        logging.exception('died on exception')
+        throw

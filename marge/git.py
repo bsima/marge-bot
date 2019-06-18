@@ -177,7 +177,10 @@ class Repo(namedtuple('Repo', 'remote_url local_path ssh_key_file timeout refere
             command.extend(['-C', self.local_path])
         command.extend([arg for arg in args if str(arg)])
 
-        log.info('Running %s', ' '.join(shlex.quote(w) for w in command))
+        log.info(
+            'Running %s %s',
+            ' '.join('%s=%r' % (k, v) for (k, v) in sorted(env.items())),
+            ' '.join(shlex.quote(w) for w in command))
         try:
             timeout_seconds = self.timeout.total_seconds() if self.timeout is not None else None
             return _run(*command, env=env, check=True, timeout=timeout_seconds)
