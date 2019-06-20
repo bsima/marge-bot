@@ -52,6 +52,7 @@ def _parse_config(args):
     )
     # Log this on startup, so we can tell which version is running.
     parser.add_argument('--set-version', type=str)
+    parser.add_argument('--log-name', type=str)
     parser.add_argument(
         '--config-file',
         env_var='MARGE_CONFIG_FILE',
@@ -280,7 +281,7 @@ def main(args=None):
     if not args:
         args = sys.argv[1:]
     options = _parse_config(args)
-    setup_logging('marge-bot', options.set_version)
+    setup_logging(options.log_name, options.set_version)
 
     if options.debug:
         logging.getLogger().setLevel(logging.DEBUG)
