@@ -75,7 +75,7 @@ class MergeJob(object):
         if self.during_merge_embargo():
             raise SkipMerge('Merge embargo!')
 
-        if self._user.id != merge_request.assignee_id:
+        if self._user.id not in merge_request.assignee_ids:
             raise SkipMerge('It is not assigned to me anymore!')
 
     def add_trailers(self, merge_request):

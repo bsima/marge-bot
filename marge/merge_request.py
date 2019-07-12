@@ -38,7 +38,8 @@ class MergeRequest(gitlab.Resource):
         ))
         my_merge_request_infos = [
             mri for mri in all_merge_request_infos
-            if (mri['assignee'] or {}).get('id') == user_id
+            if any(assignee.get('id') == user_id
+              for assignee in mri.get('assignees', []))
         ]
 
         return [cls(api, merge_request_info) for merge_request_info in my_merge_request_infos]
@@ -60,9 +61,8 @@ class MergeRequest(gitlab.Resource):
         return self.info['state']
 
     @property
-    def assignee_id(self):
-        assignee = self.info['assignee'] or {}
-        return assignee.get('id')
+    def assignee_ids(self):
+        return [a.get('id') for a in self.info['assignees'] or []]
 
     @property
     def author_id(self):
