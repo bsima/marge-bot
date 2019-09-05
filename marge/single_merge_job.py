@@ -123,11 +123,15 @@ class SingleMergeJob(MergeJob):
                     updated_into_up_to_date_target_branch = True
                 else:
                     raise CannotMerge(
-                        "Gitlab refused to merge this request and I don't know why! MR state was: {}"
-                        .format(merge_request.state))
-            except gitlab.ApiError:
+                        ("Gitlab refused to merge this request and I don't know why!\n"
+                         "MR state was: {}, exception was: {}\n"
+                         "A common cause is that there is an un-resolved discussion."
+                         " Gitlab reports this as '405 Method Not Allowed'.")
+                        .format(merge_request.state, ex))
+            except gitlab.ApiError as ex:
                 log.exception('Unanticipated ApiError from GitLab on merge attempt')
-                raise CannotMerge('had some issue with GitLab, check my logs...')
+                raise CannotMerge(
+                    'had some issue with GitLab, check my logs...\nException: {}'.format(ex))
             else:
                 self.wait_for_branch_to_be_merged()
                 updated_into_up_to_date_target_branch = True
