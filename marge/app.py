@@ -8,6 +8,7 @@ import logging.handlers
 import os
 import pwd
 import re
+import signal
 import sys
 import tempfile
 import time
@@ -277,7 +278,18 @@ def setup_logging(app_name, version):
     logging.info('starting, version %s, argv: %s', version, sys.argv)
 
 
+def handle(sig, _):
+    raise SignalError(sig)
+
+class SignalError(Exception):
+    """Raised on an signal."""
+    def __init__(self, signal):
+        Exception.__init__(self)
+        self.signal = signal
+
+
 def main(args=None):
+    signal.signal(signal.SIGTERM, handle)
     if not args:
         args = sys.argv[1:]
     options = _parse_config(args)
@@ -325,6 +337,9 @@ def main(args=None):
 
             marge_bot = bot.Bot(api=api, config=config)
             marge_bot.start()
+    except SignalError as exc:
+        logging.info('died on signal: %s' % (exc.signal,))
+        sys.exit(exc.signal)
     except Exception as exc:
         logging.exception('died on exception')
         throw

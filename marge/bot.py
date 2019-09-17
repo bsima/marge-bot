@@ -1,4 +1,5 @@
 import logging as log
+import os
 import time
 from collections import namedtuple
 from tempfile import TemporaryDirectory
@@ -31,7 +32,7 @@ class Bot(object):
             )
 
     def start(self):
-        with TemporaryDirectory() as root_dir:
+        with TemporaryDirectory(prefix='marge.%d.' % os.getpid()) as root_dir:
             repo_manager = store.RepoManager(
                 user=self.user,
                 root_dir=root_dir,
