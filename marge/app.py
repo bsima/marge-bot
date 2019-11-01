@@ -17,6 +17,7 @@ from datetime import timedelta
 import configargparse
 
 from . import bot
+from . import error
 from . import gitlab
 from . import interval
 from . import job
@@ -278,18 +279,8 @@ def setup_logging(app_name, version):
     logging.info('starting, version %s, argv: %s', version, sys.argv)
 
 
-def handle(sig, _):
-    raise SignalError(sig)
-
-class SignalError(Exception):
-    """Raised on an signal."""
-    def __init__(self, signal):
-        Exception.__init__(self)
-        self.signal = signal
-
-
 def main(args=None):
-    signal.signal(signal.SIGTERM, handle)
+    error.install_signal_handler();
     if not args:
         args = sys.argv[1:]
     options = _parse_config(args)

@@ -3,7 +3,9 @@ import logging as log
 import time
 from datetime import datetime
 
-from . import git, gitlab
+from . import error
+from . import git
+from . import gitlab
 from .commit import Commit
 from .job import CannotMerge, MergeJob, SkipMerge
 
@@ -34,6 +36,8 @@ class SingleMergeJob(MergeJob):
             log.exception('Unexpected Git error')
             merge_request.comment('Something seems broken on my local git repo; check my logs!')
             raise
+        except error.SignalError:
+            raise # it's ok, propagate it
         except Exception:
             log.exception('Unexpected Exception')
             merge_request.comment("I'm broken on the inside, please somebody fix me... :cry:")
