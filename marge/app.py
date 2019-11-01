@@ -13,6 +13,7 @@ from datetime import timedelta
 import configargparse
 
 from . import bot
+from . import error
 from . import interval
 from . import gitlab
 from . import user as user_module
@@ -292,18 +293,8 @@ def _secret_auth_token_and_ssh_key(options):
 
 
 
-def handle(sig, _):
-    raise SignalError(sig)
-
-class SignalError(Exception):
-    """Raised on an signal."""
-    def __init__(self, signal):
-        Exception.__init__(self)
-        self.signal = signal
-
-
 def main(args=None):
-    signal.signal(signal.SIGTERM, handle)
+    error.install_signal_handler();
     if not args:
         args = sys.argv[1:]
     logging.basicConfig()
@@ -373,7 +364,7 @@ def main(args=None):
         try:
             marge_bot = bot.Bot(api=api, config=config)
             marge_bot.start()
-        except SignalError as exc:
+        except error.SignalError as exc:
             logging.info('died on signal: %s' % (exc.signal,))
             sys.exit(exc.signal)
         except Exception as exc:
