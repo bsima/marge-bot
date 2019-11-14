@@ -328,7 +328,7 @@ def main(args=None):
 
             marge_bot = bot.Bot(api=api, config=config)
             marge_bot.start()
-    except SignalError as exc:
+    except error.SignalError as exc:
         logging.info('died on signal: %s' % (exc.signal,))
         sys.exit(exc.signal)
     except Exception as exc:
