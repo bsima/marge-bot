@@ -121,7 +121,9 @@ class MergeRequest(gitlab.Resource):
             '/projects/{0.project_id}/merge_requests/{0.iid}/merge'.format(self),
             dict(
                 should_remove_source_branch=remove_branch,
-                merge_when_pipeline_succeeds=True,
+                # TODO(bsima): change to True when gitlab is next released with this fixed:
+                # https://gitlab.com/gitlab-org/gitlab/issues/121620
+                merge_when_pipeline_succeeds=False,
                 sha=sha or self.sha,  # if provided, ensures what is merged is what we want (or fails)
             ),
         ))
