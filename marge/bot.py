@@ -178,13 +178,22 @@ class Bot:
                 return
             except git.GitError as err:
                 log.exception('BatchMergeJob failed: %s', err)
-        log.info('Attempting to merge the oldest MR...')
-        merge_request = merge_requests[0]
-        merge_job = self._get_single_job(
-            project=project, merge_request=merge_request, repo=repo,
-            options=self._config.merge_opts,
-        )
-        merge_job.execute()
+        elif not self._config.skip_pending:
+            log.info('Attempting to merge the oldest MR...')
+            merge_request = merge_requests[0]
+            merge_job = self._get_single_job(
+                project=project, merge_request=merge_request, repo=repo,
+                options=self._config.merge_opts,
+            )
+            merge_job.execute()
+        else:
+            for i, merge_request in enumerate(merge_requests):
+                log.info('Attempting to merge MR #%d / %d of assigned MRs...', i + 1, len(merge_requests))
+                merge_job = self._get_single_job(
+                    project=project, merge_request=merge_request,
+                    repo=repo, options=self._config.merge_opts
+                )
+                merge_job.execute()
 
     def _get_single_job(self, project, merge_request, repo, options):
         return single_merge_job.SingleMergeJob(
@@ -199,7 +208,8 @@ class Bot:
 
 class BotConfig(namedtuple('BotConfig',
                            'user use_https auth_token ssh_key_file project_regexp merge_order merge_opts ' +
-                           'git_timeout git_reference_repo branch_regexp source_branch_regexp batch cli')):
+                           'git_timeout git_reference_repo branch_regexp source_branch_regexp batch cli ' +
+                           'skip_pending')):
     pass
 
 

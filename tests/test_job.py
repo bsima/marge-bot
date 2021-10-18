@@ -247,6 +247,7 @@ class TestMergeJobOptions:
             approval_timeout=timedelta(seconds=0),
             embargo=marge.interval.IntervalUnion.empty(),
             ci_timeout=timedelta(minutes=15),
+            ci_timeout_skip=False,
             fusion=Fusion.rebase,
             use_no_ff_batches=False,
             use_merge_commit_batches=False,
