@@ -199,7 +199,7 @@ class MergeJob:
                 pipeline = Pipeline.start(
                     merge_request.source_project_id, merge_request.source_branch, self._api)
                 log.info('Started pipeline %s', pipeline.id)
-            elif ci_status not in ('pending', 'running'):
+            elif ci_status not in ('pending', 'running', 'created'):
                 log.warning('Suspicious CI status: %r', ci_status)
 
             log.debug('Waiting for %s secs before polling CI status again', waiting_time_in_secs)
