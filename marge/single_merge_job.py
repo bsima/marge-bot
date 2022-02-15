@@ -37,7 +37,7 @@ class SingleMergeJob(MergeJob):
             merge_request.comment('Something seems broken on my local git repo; check my logs!')
             raise
         except error.SignalError:
-            raise # it's ok, propagate it
+            raise  # it's ok, propagate it
         except Exception:
             log.exception('Unexpected Exception')
             merge_request.comment("I'm broken on the inside, please somebody fix me... :cry:")

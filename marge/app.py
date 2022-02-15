@@ -5,7 +5,6 @@ An auto-merger of merge requests for GitLab
 import contextlib
 import logging
 import re
-import signal
 import sys
 import tempfile
 from datetime import timedelta
@@ -292,9 +291,8 @@ def _secret_auth_token_and_ssh_key(options):
                 tmp_ssh_key_file.close()
 
 
-
 def main(args=None):
-    error.install_signal_handler();
+    error.install_signal_handler()
     if not args:
         args = sys.argv[1:]
     logging.basicConfig()
@@ -365,8 +363,5 @@ def main(args=None):
             marge_bot = bot.Bot(api=api, config=config)
             marge_bot.start()
         except error.SignalError as exc:
-            logging.info('died on signal: %s' % (exc.signal,))
+            logging.info('died on signal: %s', (exc.signal,))
             sys.exit(exc.signal)
-        except Exception as exc:
-            logging.exception('died on exception')
-            throw
