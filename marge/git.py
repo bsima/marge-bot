@@ -101,6 +101,21 @@ class Repo(namedtuple('Repo', 'remote_url local_path ssh_key_file timeout refere
         """
         return self._fuse_branch('rebase', branch, new_base, source_repo_url=source_repo_url, local=local)
 
+    def rebase_then_merge(self, *args, **kw):
+        """Try `self.rebase`, if that fails then try `self.merge`.
+
+        Throws a `GitError` if the merge fails.
+        """
+        try:
+            return self.rebase(*args, **kw)
+        except GitError as rebase_error:
+            log.info('rebase failed, trying merge: %s', rebase_error)
+            try:
+                return self.merge(*args, **kw)
+            except GitError as merge_error:
+                log.info('merge also failed: %s', merge_error)
+                raise
+
     def _fuse_branch(self, strategy, branch, target_branch, *fuse_args, source_repo_url=None, local=False):
         assert source_repo_url or branch != target_branch, branch
 

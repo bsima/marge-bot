@@ -302,6 +302,7 @@ class MergeJob:
             Fusion.rebase: self._repo.rebase,
             Fusion.merge: self._repo.merge,
             Fusion.gitlab_rebase: self._repo.rebase,  # we rebase locally to know sha
+            Fusion.rebase_then_merge: self._repo.rebase_then_merge,
         }
 
         strategy = strategies[self._options.fusion]
@@ -458,6 +459,7 @@ class Fusion(enum.Enum):
     merge = 0
     rebase = 1
     gitlab_rebase = 2
+    rebase_then_merge = 3
 
 
 JOB_OPTIONS = [

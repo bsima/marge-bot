@@ -112,7 +112,7 @@ def test_rebase_remotely():
 
 def test_use_merge_strategy():
     with env(MARGE_AUTH_TOKEN="NON-ADMIN-TOKEN", MARGE_SSH_KEY="KEY", MARGE_GITLAB_URL='http://foo.com'):
-        with main('--use-merge-strategy') as bot:
+        with main('--merge-strategy=merge') as bot:
             assert bot.config.merge_opts != job.MergeJobOptions.default()
             assert bot.config.merge_opts == job.MergeJobOptions.default(fusion=job.Fusion.merge)
 
@@ -127,7 +127,7 @@ def test_add_tested():
 def test_use_merge_strategy_and_add_tested_are_mutualy_exclusive():
     with env(MARGE_AUTH_TOKEN="NON-ADMIN-TOKEN", MARGE_SSH_KEY="KEY", MARGE_GITLAB_URL='http://foo.com'):
         with pytest.raises(app.MargeBotCliArgError):
-            with main('--use-merge-strategy --add-tested'):
+            with main('--merge-strategy=merge --add-tested'):
                 pass
 
 
@@ -151,7 +151,7 @@ def test_add_reviewers():
 
 
 def test_rebase_remotely_option_conflicts():
-    for conflicting_flag in ['--use-merge-strategy', '--add-tested', '--add-part-of', '--add-reviewers']:
+    for conflicting_flag in ['--merge-strategy=merge', '--add-tested', '--add-part-of', '--add-reviewers']:
         with env(MARGE_AUTH_TOKEN="NON-ADMIN-TOKEN", MARGE_SSH_KEY="KEY", MARGE_GITLAB_URL='http://foo.com'):
             with pytest.raises(app.MargeBotCliArgError):
                 with main('--rebase-remotely %s' % conflicting_flag):

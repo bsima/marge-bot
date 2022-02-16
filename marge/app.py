@@ -111,13 +111,15 @@ def _parse_config(args):
     )
     experimental_group = parser.add_mutually_exclusive_group(required=False)
     experimental_group.add_argument(
-        '--use-merge-strategy',
-        action='store_true',
+        '--merge-strategy',
+        choices=["rebase", "merge", "rebase_then_merge"],
+        default="rebase",
         help=(
-            'Use git merge instead of git rebase to update the *source* branch (EXPERIMENTAL)\n'
+            'Choose the merge strategy to use when updating the *source* branch (EXPERIMENTAL)\n'
             'If you need to use a strict no-rebase workflow (in most cases\n'
             'you don\'t want this, even if you configured gitlab to use merge requests\n'
             'to use merge commits on the *target* branch (the default).)\n'
+            'Options: merge, rebase, rebase_then_merge\n'
         ),
     )
     parser.add_argument(
@@ -259,13 +261,16 @@ def _parse_config(args):
     )
     config = parser.parse_args(args)
 
-    if config.use_merge_strategy and config.batch:
-        raise MargeBotCliArgError('--use-merge-strategy and --batch are currently mutually exclusive')
-    if config.use_merge_strategy and config.add_tested:
-        raise MargeBotCliArgError('--use-merge-strategy and --add-tested are currently mutually exclusive')
+    if config.merge_strategy == "merge" and config.batch:
+        raise MargeBotCliArgError('--merge-strategy=merge and --batch are currently mutually exclusive')
+    if config.merge_strategy == "merge" and config.add_tested:
+        raise MargeBotCliArgError('--merge-strategy=merge and --add-tested are currently mutually exclusive')
+    if config.merge_strategy == "rebase_then_merge" and config.add_tested:
+        raise MargeBotCliArgError(
+            '--merge-strategy=rebase_then_merge and --add-tested are currently mutually exclusive'
+        )
     if config.rebase_remotely:
         conflicting_flag = [
-            '--use-merge-strategy',
             '--add-tested',
             '--add-reviewers',
             '--add-part-of',
@@ -273,6 +278,10 @@ def _parse_config(args):
         for flag in conflicting_flag:
             if getattr(config, flag[2:].replace("-", "_")):
                 raise MargeBotCliArgError('--rebase-remotely and %s are mutually exclusive' % flag)
+            if config.merge_strategy in ["rebase_then_merge", "merge"]:
+                raise MargeBotCliArgError(
+                    '--rebase-remotely requires --merge-strategy=rebase, not %s' % config.merge_strategy
+                )
 
     cli_args = []
     # pylint: disable=protected-access
@@ -327,7 +336,7 @@ def main(args=None):
         if options.batch:
             logging.warning('Experimental batch mode enabled')
 
-        if options.use_merge_strategy:
+        if options.merge_strategy == "merge":
             fusion = bot.Fusion.merge
         elif options.rebase_remotely:
             version = api.version()
@@ -337,8 +346,10 @@ def main(args=None):
                     "but your instance is {}".format(version)
                 )
             fusion = bot.Fusion.gitlab_rebase
-        else:
+        elif options.merge_strategy == "rebase":
             fusion = bot.Fusion.rebase
+        elif options.merge_strategy == "rebase_then_merge":
+            fusion = bot.Fusion.rebase_then_merge
 
         config = bot.BotConfig(
             user=user,
