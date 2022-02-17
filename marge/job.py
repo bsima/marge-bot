@@ -139,7 +139,7 @@ class MergeJob:
             )
         return sha
 
-    def get_mr_ci_status(self, merge_request, commit_sha=None):
+    def get_mr_ci_status(self, merge_request, commit_sha=None, ci_run_by_me=False):
         if commit_sha is None:
             commit_sha = merge_request.sha
 
@@ -148,12 +148,14 @@ class MergeJob:
                 merge_request.target_project_id,
                 merge_request.iid,
                 self._api,
+                username=self._user.username if ci_run_by_me else None,
             )
         else:
             pipelines = Pipeline.pipelines_by_branch(
                 merge_request.source_project_id,
                 merge_request.source_branch,
                 self._api,
+                username=self._user.username if ci_run_by_me else None,
             )
         current_pipeline = next(iter(pipeline for pipeline in pipelines if pipeline.sha == commit_sha), None)
 
@@ -172,9 +174,12 @@ class MergeJob:
         if commit_sha is None:
             commit_sha = merge_request.sha
 
+        ci_run_by_me = self._options.require_ci_run_by_me
+
         log.info('Waiting for CI to pass for MR !%s', merge_request.iid)
         while datetime.utcnow() - time_0 < self._options.ci_timeout:
-            ci_status = self.get_mr_ci_status(merge_request, commit_sha=commit_sha)
+            ci_status = self.get_mr_ci_status(
+                merge_request, commit_sha=commit_sha, ci_run_by_me=ci_run_by_me)
             if ci_status == 'success':
                 log.info('CI for MR !%s passed', merge_request.iid)
                 return
@@ -189,12 +194,19 @@ class MergeJob:
             if ci_status == 'canceled':
                 raise CannotMerge('Someone canceled the CI.')
 
-            if ci_status not in ('pending', 'running'):
+            if ci_status is None and ci_run_by_me:
+                log.info('Starting a CI in my name')
+                pipeline = Pipeline.start(
+                    merge_request.source_project_id, merge_request.source_branch, self._api)
+                log.info('Started pipeline %s', pipeline.id)
+            elif ci_status not in ('pending', 'running', 'created'):
                 log.warning('Suspicious CI status: %r', ci_status)
 
             log.debug('Waiting for %s secs before polling CI status again', waiting_time_in_secs)
             time.sleep(waiting_time_in_secs)
 
+        if self._options.ci_timeout_skip:
+            raise SkipMerge('CI is taking too long.')
         raise CannotMerge('CI is taking too long.')
 
     def wait_for_merge_status_to_resolve(self, merge_request):
@@ -290,6 +302,7 @@ class MergeJob:
             Fusion.rebase: self._repo.rebase,
             Fusion.merge: self._repo.merge,
             Fusion.gitlab_rebase: self._repo.rebase,  # we rebase locally to know sha
+            Fusion.rebase_then_merge: self._repo.rebase_then_merge,
         }
 
         strategy = strategies[self._options.fusion]
@@ -446,6 +459,7 @@ class Fusion(enum.Enum):
     merge = 0
     rebase = 1
     gitlab_rebase = 2
+    rebase_then_merge = 3
 
 
 JOB_OPTIONS = [
@@ -460,6 +474,8 @@ JOB_OPTIONS = [
     'use_no_ff_batches',
     'use_merge_commit_batches',
     'skip_ci_batches',
+    'require_ci_run_by_me',
+    'ci_timeout_skip',
 ]
 
 
@@ -474,8 +490,9 @@ class MergeJobOptions(namedtuple('MergeJobOptions', JOB_OPTIONS)):
     def default(
             cls, *,
             add_tested=False, add_part_of=False, add_reviewers=False, reapprove=False,
-            approval_timeout=None, embargo=None, ci_timeout=None, fusion=Fusion.rebase,
-            use_no_ff_batches=False, use_merge_commit_batches=False, skip_ci_batches=False,
+            approval_timeout=None, embargo=None, ci_timeout=None, ci_timeout_skip=False,
+            fusion=Fusion.rebase, use_no_ff_batches=False, use_merge_commit_batches=False,
+            skip_ci_batches=False, require_ci_run_by_me=False,
     ):
         approval_timeout = approval_timeout or timedelta(seconds=0)
         embargo = embargo or IntervalUnion.empty()
@@ -488,10 +505,12 @@ class MergeJobOptions(namedtuple('MergeJobOptions', JOB_OPTIONS)):
             approval_timeout=approval_timeout,
             embargo=embargo,
             ci_timeout=ci_timeout,
+            ci_timeout_skip=ci_timeout_skip,
             fusion=fusion,
             use_no_ff_batches=use_no_ff_batches,
             use_merge_commit_batches=use_merge_commit_batches,
             skip_ci_batches=skip_ci_batches,
+            require_ci_run_by_me=require_ci_run_by_me,
         )
 
 

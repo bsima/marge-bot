@@ -229,6 +229,7 @@ class TestUpdateAndAccept:  # pylint: disable=too-many-public-methods
                 marge.job.Fusion.rebase: 'rebase(%s onto %s)',
                 marge.job.Fusion.merge: 'merge(%s with %s)',
                 marge.job.Fusion.gitlab_rebase: 'rebase(%s onto %s)',
+                marge.job.Fusion.rebase_then_merge: 'rebase(%s onto %s)',
             }
             return pats[fusion] % (new, old)
         yield new_sha

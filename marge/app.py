@@ -12,6 +12,7 @@ from datetime import timedelta
 import configargparse
 
 from . import bot
+from . import error
 from . import interval
 from . import gitlab
 from . import user as user_module
@@ -32,6 +33,7 @@ def time_interval(str_interval):
         ) from err
 
 
+# pylint: disable=too-many-statements
 def _parse_config(args):
 
     def regexp(str_regex):
@@ -109,13 +111,15 @@ def _parse_config(args):
     )
     experimental_group = parser.add_mutually_exclusive_group(required=False)
     experimental_group.add_argument(
-        '--use-merge-strategy',
-        action='store_true',
+        '--merge-strategy',
+        choices=["rebase", "merge", "rebase_then_merge"],
+        default="rebase",
         help=(
-            'Use git merge instead of git rebase to update the *source* branch (EXPERIMENTAL)\n'
+            'Choose the merge strategy to use when updating the *source* branch (EXPERIMENTAL)\n'
             'If you need to use a strict no-rebase workflow (in most cases\n'
             'you don\'t want this, even if you configured gitlab to use merge requests\n'
             'to use merge commits on the *target* branch (the default).)\n'
+            'Options: merge, rebase, rebase_then_merge\n'
         ),
     )
     parser.add_argument(
@@ -188,6 +192,14 @@ def _parse_config(args):
         help='Deprecated; use --ci-timeout.\n',
     )
     parser.add_argument(
+        '--require-ci-run-by-me',
+        action='store_true',
+        help=(
+            'Require a successful CI started by me. Start one if necessary.\n'
+            'The idea is that you can use $GITLAB_USER_LOGIN = marge-bot to run expensive merge-only CI.\n'
+        ),
+    )
+    parser.add_argument(
         '--git-timeout',
         type=time_interval,
         default='120s',
@@ -237,15 +249,28 @@ def _parse_config(args):
         action='store_true',
         help='Run marge-bot as a single CLI command, not a service'
     )
+    parser.add_argument(
+        '--ci-timeout-skip',
+        action='store_true',
+        help='Skip to next MR if CI timeout expires (otherwise, give up on MR)'
+    )
+    parser.add_argument(
+        '--skip-pending',
+        action='store_true',
+        help='Skip to next MR if oldest MR is not ready (otherwise, wait until it is)'
+    )
     config = parser.parse_args(args)
 
-    if config.use_merge_strategy and config.batch:
-        raise MargeBotCliArgError('--use-merge-strategy and --batch are currently mutually exclusive')
-    if config.use_merge_strategy and config.add_tested:
-        raise MargeBotCliArgError('--use-merge-strategy and --add-tested are currently mutually exclusive')
+    if config.merge_strategy == "merge" and config.batch:
+        raise MargeBotCliArgError('--merge-strategy=merge and --batch are currently mutually exclusive')
+    if config.merge_strategy == "merge" and config.add_tested:
+        raise MargeBotCliArgError('--merge-strategy=merge and --add-tested are currently mutually exclusive')
+    if config.merge_strategy == "rebase_then_merge" and config.add_tested:
+        raise MargeBotCliArgError(
+            '--merge-strategy=rebase_then_merge and --add-tested are currently mutually exclusive'
+        )
     if config.rebase_remotely:
         conflicting_flag = [
-            '--use-merge-strategy',
             '--add-tested',
             '--add-reviewers',
             '--add-part-of',
@@ -253,13 +278,19 @@ def _parse_config(args):
         for flag in conflicting_flag:
             if getattr(config, flag[2:].replace("-", "_")):
                 raise MargeBotCliArgError('--rebase-remotely and %s are mutually exclusive' % flag)
+            if config.merge_strategy in ["rebase_then_merge", "merge"]:
+                raise MargeBotCliArgError(
+                    '--rebase-remotely requires --merge-strategy=rebase, not %s' % config.merge_strategy
+                )
 
     cli_args = []
     # pylint: disable=protected-access
     for _, (_, value) in parser._source_to_settings.get(configargparse._COMMAND_LINE_SOURCE_KEY, {}).items():
-        cli_args.extend(value)
+        # remove '=value' from any '--arg=value'
+        args = [a.split('=')[0] for a in value]
+        cli_args.extend(args)
     for bad_arg in ['--auth-token', '--ssh-key']:
-        if any(bad_arg in arg for arg in cli_args):
+        if bad_arg in cli_args:
             raise MargeBotCliArgError('"%s" can only be set via ENV var or config file.' % bad_arg)
     return config
 
@@ -282,7 +313,8 @@ def _secret_auth_token_and_ssh_key(options):
 
 
 def main(args=None):
-    if args is None:
+    error.install_signal_handler()
+    if not args:
         args = sys.argv[1:]
     logging.basicConfig()
 
@@ -306,7 +338,7 @@ def main(args=None):
         if options.batch:
             logging.warning('Experimental batch mode enabled')
 
-        if options.use_merge_strategy:
+        if options.merge_strategy == "merge":
             fusion = bot.Fusion.merge
         elif options.rebase_remotely:
             version = api.version()
@@ -316,8 +348,10 @@ def main(args=None):
                     "but your instance is {}".format(version)
                 )
             fusion = bot.Fusion.gitlab_rebase
-        else:
+        elif options.merge_strategy == "rebase":
             fusion = bot.Fusion.rebase
+        elif options.merge_strategy == "rebase_then_merge":
+            fusion = bot.Fusion.rebase_then_merge
 
         config = bot.BotConfig(
             user=user,
@@ -338,14 +372,21 @@ def main(args=None):
                 approval_timeout=options.approval_reset_timeout,
                 embargo=options.embargo,
                 ci_timeout=options.ci_timeout,
+                ci_timeout_skip=options.ci_timeout_skip,
                 fusion=fusion,
                 use_no_ff_batches=options.use_no_ff_batches,
                 use_merge_commit_batches=options.use_merge_commit_batches,
                 skip_ci_batches=options.skip_ci_batches,
+                require_ci_run_by_me=options.require_ci_run_by_me,
             ),
             batch=options.batch,
             cli=options.cli,
+            skip_pending=options.skip_pending,
         )
 
-        marge_bot = bot.Bot(api=api, config=config)
-        marge_bot.start()
+        try:
+            marge_bot = bot.Bot(api=api, config=config)
+            marge_bot.start()
+        except error.SignalError as exc:
+            logging.info('died on signal: %s', (exc.signal,))
+            sys.exit(exc.signal)
