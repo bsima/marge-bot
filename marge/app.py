@@ -286,9 +286,11 @@ def _parse_config(args):
     cli_args = []
     # pylint: disable=protected-access
     for _, (_, value) in parser._source_to_settings.get(configargparse._COMMAND_LINE_SOURCE_KEY, {}).items():
-        cli_args.extend(value)
+        # remove '=value' from any '--arg=value'
+        args = [a.split('=')[0] for a in value]
+        cli_args.extend(args)
     for bad_arg in ['--auth-token', '--ssh-key']:
-        if any(bad_arg in arg for arg in cli_args):
+        if bad_arg in cli_args:
             raise MargeBotCliArgError('"%s" can only be set via ENV var or config file.' % bad_arg)
     return config
 
